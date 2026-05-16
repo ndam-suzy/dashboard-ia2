@@ -1,0 +1,1589 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+from PIL import Image as PILImage
+import joblib
+import os
+import warnings
+warnings.filterwarnings("ignore")
+
+# ══════════════════════════════════════════════════════════════════════
+# CONFIG
+# ══════════════════════════════════════════════════════════════════════
+st.set_page_config(
+    page_title="IA2 — Deep Learning",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+IMG = "graphiques"
+MOD = "modeles"
+CLASS_NAMES = ["T-shirt","Pantalon","Pull","Robe","Manteau",
+               "Sandale","Chemise","Sneaker","Sac","Bottine"]
+
+# ══════════════════════════════════════════════════════════════════════
+# CSS — Glassmorphism / iOS 26 Liquid Glass
+# ══════════════════════════════════════════════════════════════════════
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+
+:root {
+  --brown-dark:   #3D1F0E;
+  --brown-main:   #8B5E3C;
+  --brown-mid:    #B8845A;
+  --brown-warm:   #D4A47A;
+  --brown-caramel:#E8C49A;
+  --brown-light:  #F0DEC8;
+  --brown-pale:   #F8EFE4;
+  --bg:           #FBF7F2;
+  --white:        #FFFFFF;
+  --text:         #2C1A0E;
+  --text-muted:   #9E8070;
+  --glass-bg:     rgba(255,255,255,0.55);
+  --glass-border: rgba(255,255,255,0.75);
+  --glass-shadow: rgba(141,94,60,0.12);
+  --blur:         20px;
+  --radius:       18px;
+  --radius-sm:    12px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, [class*="css"] {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ── Animated mesh background ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 10%, rgba(212,164,122,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 80%, rgba(139,94,60,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 40% at 50% 50%, rgba(232,196,154,0.08) 0%, transparent 70%),
+    var(--bg);
+  animation: meshFloat 12s ease-in-out infinite alternate;
+}
+@keyframes meshFloat {
+  0%   { background-position: 0% 0%, 100% 100%, 50% 50%; }
+  100% { background-position: 5% 8%, 95% 92%, 55% 45%; }
+}
+
+/* ══════════════════
+   SIDEBAR
+══════════════════ */
+[data-testid="stSidebar"] {
+  background: linear-gradient(160deg, var(--brown-dark) 0%, #5C2E14 60%, var(--brown-main) 100%);
+  border-right: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+}
+[data-testid="stSidebar"] * { color: var(--brown-pale) !important; }
+[data-testid="stSidebar"] .stRadio > label { display: none !important; }
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 4px;
+}
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.83rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(248,239,228,0.7) !important;
+  position: relative;
+  overflow: hidden;
+}
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.12);
+  color: var(--brown-pale) !important;
+}
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover::before { opacity: 1; }
+[data-testid="stSidebar"] .stRadio [aria-checked="true"] ~ div label,
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-checked="true"] {
+  background: rgba(255,255,255,0.14) !important;
+  border-color: rgba(212,164,122,0.4) !important;
+  color: var(--white) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+/* ══════════════════
+   MAIN LAYOUT
+══════════════════ */
+.main .block-container {
+  padding: 2rem 2.5rem 4rem 2.5rem;
+  max-width: 1300px;
+}
+
+/* ══════════════════
+   PAGE HEADER
+══════════════════ */
+.hero {
+  position: relative;
+  padding: 2.5rem 2.5rem 2rem;
+  margin-bottom: 2rem;
+  border-radius: 24px;
+  background: linear-gradient(135deg,
+    rgba(255,255,255,0.7) 0%,
+    rgba(248,239,228,0.5) 100%);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 40px var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,0.9);
+  overflow: hidden;
+  animation: heroIn 0.6s cubic-bezier(0.4,0,0.2,1) both;
+}
+@keyframes heroIn {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -40%;
+  right: -10%;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,164,122,0.2) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brown-mid);
+  margin-bottom: 0.5rem;
+}
+.hero-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: 800;
+  color: var(--brown-dark);
+  line-height: 1.1;
+  margin-bottom: 0.4rem;
+}
+.hero-sub {
+  font-size: 0.88rem;
+  color: var(--brown-mid);
+  font-weight: 400;
+}
+
+/* ══════════════════
+   TABS (horizontal submenu)
+══════════════════ */
+.stTabs [data-baseweb="tab-list"] {
+  gap: 0;
+  background: rgba(255,255,255,0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 14px;
+  padding: 5px;
+  border: 1px solid rgba(255,255,255,0.8);
+  box-shadow: 0 2px 16px rgba(141,94,60,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.stTabs [data-baseweb="tab"] {
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--brown-mid);
+  padding: 7px 14px;
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  white-space: nowrap;
+}
+.stTabs [data-baseweb="tab"]:hover { color: var(--brown-dark); background: rgba(255,255,255,0.6); }
+.stTabs [aria-selected="true"] {
+  background: var(--white) !important;
+  color: var(--brown-dark) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 12px rgba(141,94,60,0.15), inset 0 1px 0 rgba(255,255,255,1) !important;
+}
+.stTabs [data-baseweb="tab-highlight"],
+.stTabs [data-baseweb="tab-border"] { display: none !important; }
+.stTabs [data-baseweb="tab-panel"] { padding: 0 !important; }
+
+/* ══════════════════
+   GLASS CARD
+══════════════════ */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 24px var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,0.9);
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.25rem;
+  animation: cardIn 0.4s cubic-bezier(0.4,0,0.2,1) both;
+}
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.glass-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--brown-dark);
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid rgba(212,164,122,0.25);
+  letter-spacing: -0.01em;
+}
+.glass p {
+  font-size: 0.875rem;
+  line-height: 1.8;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+.glass ul {
+  padding-left: 1.2rem;
+  font-size: 0.875rem;
+  line-height: 1.85;
+  color: var(--text);
+  margin: 0.3rem 0;
+}
+.glass li { margin-bottom: 0.3rem; }
+.glass strong { color: var(--brown-dark); font-weight: 600; }
+.glass code {
+  background: rgba(139,94,60,0.1);
+  color: var(--brown-main);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  font-size: 0.8em;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* ══════════════════
+   METRICS
+══════════════════ */
+.metrics-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1.75rem;
+}
+.metric-pill {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  text-align: center;
+  box-shadow: 0 2px 12px var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,0.9);
+  transition: transform 0.2s, box-shadow 0.2s;
+  animation: cardIn 0.4s cubic-bezier(0.4,0,0.2,1) both;
+}
+.metric-pill:hover { transform: translateY(-2px); box-shadow: 0 8px 24px var(--glass-shadow); }
+.metric-pill.best {
+  background: linear-gradient(135deg, rgba(212,164,122,0.35), rgba(139,94,60,0.12));
+  border-color: rgba(212,164,122,0.6);
+}
+.metric-pill.hi {
+  background: rgba(255,255,255,0.7);
+  border-color: rgba(212,164,122,0.4);
+}
+.m-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brown-mid);
+  margin-bottom: 0.35rem;
+}
+.m-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--brown-dark);
+  line-height: 1;
+}
+.m-value.sm { font-size: 1.05rem; }
+
+/* ══════════════════
+   TABLE
+══════════════════ */
+.tbl-wrap {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: 0.75rem 0 1.25rem;
+  box-shadow: 0 2px 16px var(--glass-shadow);
+}
+.tbl { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+.tbl thead tr { background: rgba(248,239,228,0.6); }
+.tbl th {
+  padding: 0.65rem 1rem;
+  text-align: left;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--brown-main);
+  border-bottom: 1px solid rgba(212,164,122,0.25);
+}
+.tbl td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid rgba(212,164,122,0.1);
+  color: var(--text);
+  transition: background 0.15s;
+}
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: rgba(248,239,228,0.5); }
+.tbl td.best { font-weight: 700; color: var(--brown-dark); }
+
+/* ══════════════════
+   CODE BLOCK
+══════════════════ */
+.codeblock {
+  background: linear-gradient(135deg, rgba(61,31,14,0.92), rgba(92,46,20,0.88));
+  backdrop-filter: blur(var(--blur));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-sm);
+  padding: 1.25rem 1.5rem;
+  font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--brown-caramel);
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  white-space: pre;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.codeblock .kw  { color: #E8A87C; font-weight: 600; }
+.codeblock .str { color: #9ECE6A; }
+.codeblock .num { color: #B8D7AA; }
+.codeblock .cmt { color: rgba(255,255,255,0.35); font-style: italic; }
+
+/* ══════════════════
+   PREDICTION BOX
+══════════════════ */
+.pred-result {
+  border-radius: var(--radius);
+  padding: 2rem 1.75rem;
+  text-align: center;
+  margin-top: 1rem;
+  animation: predIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes predIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.pred-yes {
+  background: linear-gradient(135deg,
+    rgba(212,164,122,0.45) 0%,
+    rgba(139,94,60,0.2) 100%);
+  border: 1.5px solid rgba(212,164,122,0.7);
+  box-shadow: 0 8px 32px rgba(139,94,60,0.2), inset 0 1px 0 rgba(255,255,255,0.7);
+}
+.pred-no {
+  background: rgba(255,255,255,0.5);
+  border: 1.5px solid rgba(212,164,122,0.3);
+  box-shadow: 0 4px 20px rgba(141,94,60,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+.pred-label {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--brown-dark);
+  margin-bottom: 0.75rem;
+}
+.pred-bar-bg {
+  height: 6px;
+  background: rgba(212,164,122,0.2);
+  border-radius: 99px;
+  overflow: hidden;
+  margin: 0.75rem auto;
+  width: 75%;
+}
+.pred-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--brown-caramel), var(--brown-main));
+  box-shadow: 0 0 8px rgba(139,94,60,0.4);
+}
+.pred-prob {
+  font-size: 0.82rem;
+  color: var(--brown-mid);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+/* ══════════════════
+   IMAGE
+══════════════════ */
+.img-cap {
+  font-size: 0.73rem;
+  color: var(--brown-mid);
+  text-align: center;
+  font-style: italic;
+  margin-top: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+/* ══════════════════
+   SIDEBAR BRANDING
+══════════════════ */
+.sb-brand {
+  padding: 1.5rem 0 1.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 1.5rem;
+}
+.sb-brand-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: rgba(248,239,228,0.95);
+  line-height: 1.3;
+}
+.sb-brand-sub {
+  font-size: 0.66rem;
+  font-weight: 400;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: rgba(212,164,122,0.7);
+  margin-top: 0.3rem;
+}
+.sb-nav-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(212,164,122,0.5);
+  padding: 1rem 0 0.5rem;
+}
+.sb-footer {
+  font-size: 0.67rem;
+  color: rgba(212,164,122,0.45);
+  line-height: 1.7;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: 1.5rem;
+}
+
+/* ══════════════════
+   DIVIDER
+══════════════════ */
+.div {
+  border: none;
+  border-top: 1px solid rgba(212,164,122,0.2);
+  margin: 1.5rem 0;
+}
+
+/* ══════════════════
+   SECTION LABEL
+══════════════════ */
+.sec-label {
+  font-size: 0.67rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brown-mid);
+  margin: 1.5rem 0 0.75rem;
+}
+
+/* ══════════════════
+   BUTTONS
+══════════════════ */
+.stButton > button {
+  background: linear-gradient(135deg, var(--brown-main), var(--brown-dark)) !important;
+  color: var(--white) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  padding: 0.65rem 1.75rem !important;
+  box-shadow: 0 4px 16px rgba(139,94,60,0.3), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1) !important;
+}
+.stButton > button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(139,94,60,0.35) !important;
+  opacity: 0.92 !important;
+}
+.stButton > button:active { transform: translateY(0) !important; }
+
+/* ══════════════════
+   FORM INPUTS
+══════════════════ */
+div[data-testid="stNumberInput"] label,
+div[data-testid="stSlider"] label,
+div[data-testid="stSelectbox"] label,
+div[data-testid="stFileUploader"] label {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: var(--brown-mid) !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+}
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextInput"] input {
+  border: 1px solid rgba(212,164,122,0.35) !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,0.7) !important;
+  backdrop-filter: blur(10px) !important;
+  font-size: 0.88rem !important;
+  color: var(--text) !important;
+  box-shadow: inset 0 1px 3px rgba(141,94,60,0.06) !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+div[data-testid="stNumberInput"] input:focus,
+div[data-testid="stTextInput"] input:focus {
+  border-color: rgba(139,94,60,0.5) !important;
+  box-shadow: 0 0 0 3px rgba(139,94,60,0.1), inset 0 1px 3px rgba(141,94,60,0.06) !important;
+}
+div[data-testid="stSelectbox"] > div > div {
+  border: 1px solid rgba(212,164,122,0.35) !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,0.7) !important;
+}
+
+/* ══════════════════
+   MISC
+══════════════════ */
+#MainMenu, footer, header { visibility: hidden; }
+.stAlert { border-radius: var(--radius-sm) !important; }
+.stSelectbox [data-baseweb="select"] { border-radius: 10px !important; }
+
+/* Upload zone */
+div[data-testid="stFileUploader"] {
+  background: rgba(255,255,255,0.5);
+  backdrop-filter: blur(var(--blur));
+  border: 2px dashed rgba(212,164,122,0.4);
+  border-radius: var(--radius);
+  padding: 1rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+div[data-testid="stFileUploader"]:hover {
+  background: rgba(255,255,255,0.65);
+  border-color: rgba(139,94,60,0.5);
+}
+
+/* Placeholder empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--brown-mid);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.35);
+  border: 1px dashed rgba(212,164,122,0.3);
+  border-radius: var(--radius);
+}
+.empty-state-icon {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.5;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# HELPERS
+# ══════════════════════════════════════════════════════════════════════
+
+def show_image(filename, caption=""):
+    path = os.path.join(IMG, filename)
+    if os.path.exists(path):
+        st.image(PILImage.open(path), use_container_width=True)
+        if caption:
+            st.markdown(f'<div class="img-cap">{caption}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(
+            f'<div class="glass"><p>Image non trouvee : <code>{filename}</code></p></div>',
+            unsafe_allow_html=True
+        )
+
+def glass(title, *content_parts):
+    body = "".join(content_parts)
+    st.markdown(
+        f'<div class="glass"><div class="glass-title">{title}</div>{body}</div>',
+        unsafe_allow_html=True
+    )
+
+def metrics_row(items):
+    boxes = ""
+    for label, value, cls in items:
+        sm = "sm" if len(str(value)) > 7 else ""
+        boxes += (
+            f'<div class="metric-pill {cls}">'
+            f'<div class="m-label">{label}</div>'
+            f'<div class="m-value {sm}">{value}</div>'
+            f'</div>'
+        )
+    st.markdown(f'<div class="metrics-wrap">{boxes}</div>', unsafe_allow_html=True)
+
+def html_table(columns, rows_data, best_col=None):
+    ths = "".join(f"<th>{c}</th>" for c in columns)
+    trs = ""
+    for row in rows_data:
+        cells = ""
+        for i, (col, v) in enumerate(zip(columns, row)):
+            cls = "best" if col == best_col else ""
+            cells += f"<td class='{cls}'>{v}</td>"
+        trs += f"<tr>{cells}</tr>"
+    st.markdown(
+        f'<div class="tbl-wrap"><table class="tbl">'
+        f'<thead><tr>{ths}</tr></thead>'
+        f'<tbody>{trs}</tbody>'
+        f'</table></div>',
+        unsafe_allow_html=True
+    )
+
+def codeblock(code):
+    st.markdown(f'<div class="codeblock">{code}</div>', unsafe_allow_html=True)
+
+def divider():
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+
+def sec_label(text):
+    st.markdown(f'<div class="sec-label">{text}</div>', unsafe_allow_html=True)
+
+def hero(label, title, sub):
+    st.markdown(
+        f'<div class="hero">'
+        f'<div class="hero-label">{label}</div>'
+        f'<div class="hero-title">{title}</div>'
+        f'<div class="hero-sub">{sub}</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+def pred_box(label, prob, positive=True):
+    cls = "pred-yes" if positive else "pred-no"
+    pct = int(prob * 100)
+    st.markdown(
+        f'<div class="pred-result {cls}">'
+        f'<div class="pred-label">{label}</div>'
+        f'<div class="pred-bar-bg"><div class="pred-bar-fill" style="width:{pct}%"></div></div>'
+        f'<div class="pred-prob">Probabilite estimee : {prob:.1%}</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+def empty_state(text="Lancez une prediction pour voir le resultat"):
+    st.markdown(
+        f'<div class="empty-state">'
+        f'<div class="empty-state-icon">◇</div>{text}</div>',
+        unsafe_allow_html=True
+    )
+
+# Model loaders
+@st.cache_resource
+def load_classic():
+    try:
+        m = joblib.load(os.path.join(MOD,"all_models.pkl"))
+        f = joblib.load(os.path.join(MOD,"feature_names.pkl"))
+        return m, f
+    except:
+        return None, None
+
+@st.cache_resource
+def load_nn():
+    try:
+        import pickle, tensorflow as tf
+        with open(os.path.join(MOD,"telemarketing_scaler.pkl"),"rb") as fp:
+            scaler = pickle.load(fp)
+        with open(os.path.join(MOD,"telemarketing_features.pkl"),"rb") as fp:
+            feats = pickle.load(fp)
+        model = tf.keras.models.load_model(os.path.join(MOD,"telemarketing.keras"))
+        return model, scaler, feats
+    except:
+        return None, None, None
+
+@st.cache_resource
+def load_cnn():
+    try:
+        import tensorflow as tf
+        return tf.keras.models.load_model(os.path.join(MOD,"resnet_fashion.keras"))
+    except:
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SIDEBAR
+# ══════════════════════════════════════════════════════════════════════
+with st.sidebar:
+    st.markdown(
+        '<div class="sb-brand">'
+        '<div class="sb-brand-title">Intelligence Artificielle 2</div>'
+        '<div class="sb-brand-sub">Deep Learning TP — DIPES 2</div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown('<div class="sb-nav-label">Navigation</div>', unsafe_allow_html=True)
+    partie = st.radio("", [
+        "Partie 1 — Modeles Classiques",
+        "Partie 2 — Reseau de Neurones",
+        "Partie 3 — Deep Learning CNN",
+    ], label_visibility="collapsed")
+    st.markdown(
+        '<div class="sb-footer">Universite de Yaounde I<br>Annee 2025-2026</div>',
+        unsafe_allow_html=True
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PARTIE 1 — MODELES CLASSIQUES
+# ══════════════════════════════════════════════════════════════════════
+if partie == "Partie 1 — Modeles Classiques":
+
+    hero("Partie 1", "Modeles Classiques de Machine Learning",
+         "Bank Telemarketing Dataset — UCI Repository — Classification binaire supervisee")
+
+    tabs = st.tabs([
+        "Donnees","Pretraitement","Comparaison",
+        "Arbre de decision","Bagging & RF","Boosting",
+        "Variables & ROC","Prediction"
+    ])
+
+    # ── TAB 0 : Données ───────────────────────────────────────────────
+    with tabs[0]:
+        metrics_row([
+            ("Instances","41 188","best"),
+            ("Variables","20",""),
+            ("Numeriques","10",""),
+            ("Categorielles","10",""),
+            ("Classes","2","hi"),
+            ("Desequilibre","88 / 12 %","hi"),
+        ])
+
+        col1, col2 = st.columns([1.1, 1])
+        with col1:
+            show_image("distribution_cible.png","Distribution de la variable cible (y)")
+        with col2:
+            glass("Contexte et problematique",
+                '<p>Le <strong>Bank Marketing Dataset</strong> (UCI) recense les resultats '
+                "d'une campagne de telemarketing menee par une banque portugaise entre 2008 et 2010. "
+                "L'objectif est de predire si un client souscrit a un <strong>depot a terme</strong>.</p>"
+                "<ul>"
+                "<li><strong>no — n'a pas souscrit :</strong> 36 548 clients (88.73 %)</li>"
+                "<li><strong>yes — a souscrit :</strong> 4 640 clients (11.27 %)</li>"
+                "</ul>"
+                "<p>Ce fort desequilibre rend <strong>l'accuracy trompeuse</strong> — un modele naive "
+                "predisant toujours 'no' obtiendrait 88.73 % sans rien apprendre. "
+                "On privilegiera le <strong>F1-score et l'AUC-ROC</strong>.</p>"
+            )
+
+        divider()
+        sec_label("Variables numeriques")
+        show_image("distribution_numeriques.png","Histogrammes des 10 variables numeriques")
+        glass("Observations cles",
+            "<ul>"
+            "<li><strong>age</strong> — distribution quasi-normale, concentration entre 25 et 60 ans.</li>"
+            "<li><strong>duration</strong> — fortement asymetrique. Variable non disponible avant l'appel — a exclure du deploiement.</li>"
+            "<li><strong>campaign</strong> — majorite des clients contactes 1 a 3 fois, extremes a plus de 30 contacts.</li>"
+            "<li><strong>pdays</strong> — 86 % des clients ont la valeur 999 (jamais contactes avant).</li>"
+            "<li><strong>Variables macroeconomiques</strong> (emp.var.rate, euribor3m, nr.employed) — distributions discretes "
+            "en plusieurs pics refletant des periodes economiques distinctes.</li>"
+            "</ul>"
+        )
+
+        divider()
+        sec_label("Matrice de correlation")
+        col3, col4 = st.columns(2)
+        with col3:
+            show_image("matrice_correlation.png","Matrice de correlation")
+        with col4:
+            glass("Correlations remarquables",
+                "<p><strong>Correlations fortes (r2 &gt; 0.5) :</strong></p>"
+                "<ul>"
+                "<li>emp.var.rate vs euribor3m : r2 = 0.945 — quasi-parfaite</li>"
+                "<li>euribor3m vs nr.employed : r2 = 0.893</li>"
+                "<li>emp.var.rate vs nr.employed : r2 = 0.823</li>"
+                "</ul>"
+                "<p>Ces trois variables mesurent le meme phenomene economique. "
+                "Les conserver toutes introduirait une <strong>multicolinearite severe</strong>.</p>"
+                "<p><strong>Correlations moderees :</strong></p>"
+                "<ul>"
+                "<li>pdays vs previous : r2 = 0.345</li>"
+                "<li>emp.var.rate vs cons.price.idx : r2 = 0.601</li>"
+                "</ul>"
+                "<p><strong>Aucun lien significatif :</strong> age et duration sont "
+                "independantes de toutes les autres variables (r2 &lt; 0.02).</p>"
+            )
+
+        divider()
+        sec_label("Nuages de points — croisements deux a deux")
+        groupe = st.selectbox("Groupe de variables", [
+            "Groupe 1 — age vs autres",
+            "Groupe 2 — duration vs autres",
+            "Groupe 3 — campaign & pdays",
+            "Groupe 4 — previous & macroeconomiques",
+            "Groupe 5 — macroeconomiques entre elles",
+        ])
+        mapping_scatter = {
+            "Groupe 1 — age vs autres":("scatter_groupe_1.png","age croise avec toutes les autres variables"),
+            "Groupe 2 — duration vs autres":("scatter_groupe_2.png","duration croise avec toutes les autres variables"),
+            "Groupe 3 — campaign & pdays":("scatter_groupe_3.png","campaign et pdays vs autres"),
+            "Groupe 4 — previous & macroeconomiques":("scatter_groupe_4.png","previous, pdays vs macroeconomiques"),
+            "Groupe 5 — macroeconomiques entre elles":("scatter_groupe_5.png","Correlations macroeconomiques"),
+        }
+        show_image(*mapping_scatter[groupe])
+
+    # ── TAB 1 : Pretraitement ─────────────────────────────────────────
+    with tabs[1]:
+        glass("Etape 1 — Gestion des valeurs manquantes (unknown)",
+            "<p>Six variables contiennent des valeurs <code>unknown</code> remplacees par le "
+            "<strong>mode</strong> (valeur la plus frequente) de chaque colonne, "
+            "preservant l'ensemble des 41 188 instances.</p>"
+        )
+        html_table(
+            ["Variable","Valeur de remplacement","Occurrences"],
+            [
+                ["job","admin.","330"],
+                ["marital","married","80"],
+                ["education","university.degree","1 731"],
+                ["default","no","8 597"],
+                ["housing","yes","990"],
+                ["loan","no","990"],
+            ]
+        )
+        divider()
+        col1, col2 = st.columns(2)
+        with col1:
+            glass("Etape 2 — Encodage",
+                "<ul>"
+                "<li>Variable cible : <code>no</code> → 0, <code>yes</code> → 1</li>"
+                "<li>Variables categorielles : <code>pd.get_dummies(drop_first=True)</code></li>"
+                "<li>37 nouvelles colonnes binaires creees</li>"
+                "<li>Dimensionnalite : 21 → <strong>48 colonnes</strong></li>"
+                "</ul>"
+            )
+        with col2:
+            glass("Etape 3 — Separation train / test",
+                "<ul>"
+                "<li>Entrainement : 32 950 clients (80 %)</li>"
+                "<li>Test : 8 238 clients (20 %)</li>"
+                "<li><code>stratify=y</code> preserves les proportions 88.7/11.3 %</li>"
+                "<li><code>random_state=42</code> pour la reproductibilite</li>"
+                "</ul>"
+            )
+
+    # ── TAB 2 : Comparaison ───────────────────────────────────────────
+    with tabs[2]:
+        glass("Protocole",
+            "<p>9 modeles evalues par <strong>validation croisee stratifiee a 5 plis</strong> "
+            "sur 32 950 instances. Metriques principales : <strong>F1-score et AUC-ROC</strong>.</p>"
+        )
+        show_image("comparaison_modeles.png","Comparaison des performances — 9 classifieurs")
+        divider()
+        html_table(
+            ["Modele","Accuracy","F1","Precision","Recall","AUC-ROC"],
+            [
+                ["Gradient Boosting","0.9160","0.5843","0.6605","0.5242","0.9448"],
+                ["Bagging","0.9103","0.5719","0.6192","0.5315","0.9389"],
+                ["Random Forest","0.9100","0.5275","0.6456","0.4461","0.9390"],
+                ["Decision Tree","0.8880","0.5104","0.5029","0.5186","0.7267"],
+                ["Logistic Regression","0.9093","0.5078","0.6531","0.4154","0.9329"],
+                ["AdaBoost","0.9039","0.4700","0.6215","0.3790","0.9316"],
+                ["Naive Bayes","0.8726","0.4588","0.4401","0.4793","0.8399"],
+                ["SVM","0.9054","0.4587","0.6464","0.3559","0.9258"],
+                ["KNN","0.8952","0.4093","0.5615","0.3222","0.8112"],
+            ],
+            best_col="AUC-ROC"
+        )
+        glass("Conclusions",
+            "<ul>"
+            "<li><strong>Gradient Boosting</strong> domine sur F1 (0.584) et AUC-ROC (0.945).</li>"
+            "<li><strong>Bagging</strong> : meilleur recall (0.531) — detecte le plus grand nombre de souscripteurs.</li>"
+            "<li>Les <strong>methodes d'ensemble</strong> dominent toutes les methodes simples.</li>"
+            "<li><strong>KNN</strong> : moins performant — fleau de la dimensionnalite sur 47 variables.</li>"
+            "<li><strong>Accuracy trompeuse</strong> : predire 'no' donnerait deja 88.7 %.</li>"
+            "</ul>"
+        )
+
+    # ── TAB 3 : Arbre de decision ─────────────────────────────────────
+    with tabs[3]:
+        metrics_row([
+            ("Classifieur constant","F1 = 0.000",""),
+            ("Profondeur optimale F1","4","hi"),
+            ("Profondeur optimale AUC","6","hi"),
+            ("F1 apres GridSearch","0.611","best"),
+            ("AUC apres GridSearch","0.909","best"),
+        ])
+        show_image("arbre_decision_base.png","Arbre de decision optimise (max_depth=3, criterion=entropy)")
+        divider()
+        show_image("variation_profondeur.png","Impact de max_depth sur F1 et AUC-ROC")
+        col1, col2 = st.columns(2)
+        with col1:
+            glass("Analyse du graphe F1 Train vs Test",
+                "<ul>"
+                "<li><strong>depth = 1</strong> : sous-apprentissage total — F1 Test = 0.000.</li>"
+                "<li><strong>depth 2 a 4</strong> : phase optimale, F1 Test progresse jusqu'a 0.607.</li>"
+                "<li><strong>depth &gt; 4</strong> : sur-apprentissage — F1 Train monte vers 1.000 "
+                "tandis que F1 Test decroit (0.533 a depth=None).</li>"
+                "</ul>"
+            )
+        with col2:
+            glass("Resultats GridSearchCV",
+                "<p>108 combinaisons x 5 plis = 540 entrainements</p>"
+            )
+            html_table(
+                ["Parametre","Valeurs testees","Optimal"],
+                [
+                    ["max_depth","3,4,5,6,7,8","3"],
+                    ["criterion","gini, entropy","entropy"],
+                    ["min_samples_split","2,5,10","2"],
+                    ["min_samples_leaf","1,2,4","1"],
+                ]
+            )
+
+    # ── TAB 4 : Bagging & RF ──────────────────────────────────────────
+    with tabs[4]:
+        sec_label("Bagging — impact du nombre d'arbres B")
+        show_image("bagging_variation_B.png","Evolution du F1-score et AUC en fonction de B")
+        html_table(
+            ["B","F1 Train","F1 Test","AUC Test"],
+            [
+                [1,0.8146,0.5328,0.7426],
+                [5,0.9463,0.5797,0.9006],
+                [10,0.9700,0.5657,0.9239],
+                [20,0.9921,0.5882,0.9369],
+                [50,0.9991,0.5961,0.9428],
+                [100,0.9999,0.6024,0.9451],
+                [200,1.0000,0.6032,0.9479],
+            ]
+        )
+        glass("Conclusion Bagging",
+            "<ul>"
+            "<li><strong>B = 100</strong> offre le meilleur compromis — plateau atteint, "
+            "gain negligeable au-dela.</li>"
+            "<li>La complexite augmente lineairement avec B.</li>"
+            "<li>Bagging = RandomForestClassifier avec <code>max_features=1.0</code>.</li>"
+            "</ul>"
+        )
+        divider()
+        sec_label("Random Forest — erreur OOB et optimisation de p")
+        metrics_row([
+            ("Score OOB","0.9104",""),
+            ("Erreur OOB","0.0896",""),
+            ("Accuracy Test","0.9192",""),
+            ("Erreur Test","0.0808",""),
+            ("Ecart OOB/Test","0.0088","hi"),
+            ("p optimal","15","best"),
+        ])
+        show_image("optimisation_p_rf.png","F1 et AUC en fonction du parametre p")
+        show_image("comparaison_modeles_rf.png","Comparaison : Arbre de base vs Arbre optimise vs RF optimise")
+        glass("Interpretation",
+            "<p>L'erreur OOB (0.0896) est tres proche de l'erreur test (0.0808) — ecart de "
+            "<strong>0.0088 seulement</strong>. L'OOB est un proxy fiable de la generalisation "
+            "sans necessiter de jeu de validation separe.</p>"
+            "<p>La valeur optimale <strong>p = 15</strong> est superieure a la recommandation "
+            "par defaut (sqrt(47) ≈ 7) — les fortes correlations macroeconomiques necessitent "
+            "davantage de diversite a chaque coupure.</p>"
+        )
+
+    # ── TAB 5 : Boosting ──────────────────────────────────────────────
+    with tabs[5]:
+        glass("Parametres cruciaux du Gradient Boosting",
+            "<p>Le GB entraine les arbres en <strong>sequence</strong> — chaque arbre corrige "
+            "les erreurs du precedent. Contrairement au Bagging (parallele).</p>"
+        )
+        html_table(
+            ["Parametre","Role","Valeur retenue"],
+            [
+                ["n_estimators (B)","Nombre d'arbres — trop grand = surapprentissage","263 (early stopping)"],
+                ["learning_rate (λ)","Taux de correction — λ petit + B grand = robustesse","0.05"],
+                ["max_depth (p)","Profondeur des arbres de base","3"],
+                ["validation_fraction","Part du train pour early stopping","0.10"],
+                ["n_iter_no_change","Patience avant arret automatique","20"],
+            ]
+        )
+        glass("Equivalence AdaBoost",
+            "<p><code>loss='exponential'</code>, <code>max_depth=1</code>, "
+            "<code>learning_rate=1.0</code> reproduit le comportement d'AdaBoost.</p>"
+        )
+        divider()
+        show_image("boosting_early_stopping.png","Evolution de l'erreur — Early Stopping a B=263")
+        divider()
+        sec_label("Comparaison finale des trois classifieurs optimises")
+        metrics_row([
+            ("Arbre DT — AUC","0.909",""),
+            ("Random Forest — AUC","0.949","hi"),
+            ("Gradient Boosting — AUC","0.955","best"),
+        ])
+        html_table(
+            ["Classifieur","Accuracy","F1-score","AUC-ROC"],
+            [
+                ["Arbre de decision","0.9130","0.6105","0.9086"],
+                ["Random Forest","0.9190","0.6074","0.9485"],
+                ["Gradient Boosting","0.9247","0.6158","0.9550"],
+            ],
+            best_col="AUC-ROC"
+        )
+
+    # ── TAB 6 : Variables & ROC ───────────────────────────────────────
+    with tabs[6]:
+        sec_label("Selection de variables — Feature importances")
+        show_image("feature_importances.png","Top 10 variables — Arbre, Random Forest et Gradient Boosting")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            glass("Arbre de decision",
+                "<table class='tbl'>"
+                "<thead><tr><th>Variable</th><th>Score</th></tr></thead>"
+                "<tbody>"
+                "<tr><td>duration</td><td>0.381</td></tr>"
+                "<tr><td>nr.employed</td><td>0.187</td></tr>"
+                "<tr><td>euribor3m</td><td>0.080</td></tr>"
+                "<tr><td>age</td><td>0.077</td></tr>"
+                "<tr><td>pdays</td><td>0.030</td></tr>"
+                "</tbody></table>"
+            )
+        with col2:
+            glass("Random Forest",
+                "<table class='tbl'>"
+                "<thead><tr><th>Variable</th><th>Score</th></tr></thead>"
+                "<tbody>"
+                "<tr><td>duration</td><td>0.324</td></tr>"
+                "<tr><td>euribor3m</td><td>0.106</td></tr>"
+                "<tr><td>age</td><td>0.089</td></tr>"
+                "<tr><td>nr.employed</td><td>0.079</td></tr>"
+                "<tr><td>campaign</td><td>0.039</td></tr>"
+                "</tbody></table>"
+            )
+        with col3:
+            glass("Gradient Boosting",
+                "<table class='tbl'>"
+                "<thead><tr><th>Variable</th><th>Score</th></tr></thead>"
+                "<tbody>"
+                "<tr><td>duration</td><td>0.459</td></tr>"
+                "<tr><td>nr.employed</td><td>0.261</td></tr>"
+                "<tr><td>euribor3m</td><td>0.083</td></tr>"
+                "<tr><td>pdays</td><td>0.036</td></tr>"
+                "<tr><td>age</td><td>0.029</td></tr>"
+                "</tbody></table>"
+            )
+        glass("Conclusion",
+            "<ul>"
+            "<li><strong>duration</strong> domine avec 33 a 46 % de l'importance totale — "
+            "un appel long traduit un client engage.</li>"
+            "<li><strong>nr.employed et euribor3m</strong> confirment le role du contexte macroeconomique.</li>"
+            "<li>Cinq variables forment un noyau robuste commun : duration, nr.employed, euribor3m, age, pdays.</li>"
+            "</ul>"
+        )
+        divider()
+        sec_label("Courbes ROC — comparaison des classifieurs")
+        metrics_row([
+            ("Arbre de decision","AUC 0.909",""),
+            ("Random Forest","AUC 0.949","hi"),
+            ("Gradient Boosting","AUC 0.955","best"),
+        ])
+        show_image("roc_curves.png","Courbes ROC comparatives")
+        glass("Interpretation",
+            "<ul>"
+            "<li><strong>Arbre de decision (0.909)</strong> : courbe en escalier peu granulaire — "
+            "predict_proba retourne des probabilites basees sur les proportions de feuilles terminales.</li>"
+            "<li><strong>Random Forest (0.949) et Gradient Boosting (0.955)</strong> : courbes "
+            "s'elevant rapidement vers le coin superieur gauche — excellent pouvoir discriminant.</li>"
+            "<li>La courbe ROC permet d'ajuster le seuil selon le contexte : abaisser le seuil "
+            "augmente le recall (moins de clients manques), relever le seuil ameliore la precision.</li>"
+            "</ul>"
+        )
+
+    # ── TAB 7 : Prediction ────────────────────────────────────────────
+    with tabs[7]:
+        models_data, feature_names = load_classic()
+        demo_mode = models_data is None
+
+        if demo_mode:
+            st.info("Fichiers all_models.pkl / feature_names.pkl non trouves — mode demonstration actif.")
+
+        col_f, col_r = st.columns([3, 2])
+
+        with col_f:
+            glass("Caracteristiques du client","")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                age      = st.number_input("Age", 18, 95, 40, key="p1_age")
+                duration = st.number_input("Duree appel (s)", 0, 5000, 300, key="p1_dur")
+                campaign = st.number_input("Nb contacts", 1, 50, 2, key="p1_camp")
+            with c2:
+                pdays     = st.number_input("pdays", 0, 999, 999, key="p1_pdays")
+                euribor3m = st.number_input("Euribor 3m", -2.0, 6.0, 1.3, key="p1_eur")
+                nr_emp    = st.number_input("Nr employed", 4900.0, 5300.0, 5099.1, key="p1_nremp")
+            with c3:
+                emp_var  = st.number_input("Emp var rate", -4.0, 2.0, -1.8, key="p1_emp")
+                cons_p   = st.number_input("Cons price idx", 92.0, 95.0, 93.2, key="p1_consp")
+                cons_c   = st.number_input("Cons conf idx", -55.0, -25.0, -41.8, key="p1_consc")
+            choix = st.selectbox("Modele", ["Gradient Boosting","Random Forest","Arbre de decision"], key="p1_model")
+            go = st.button("Predire", use_container_width=True, key="p1_go")
+
+        with col_r:
+            if go:
+                if demo_mode:
+                    import random
+                    proba = round(random.uniform(0.05, 0.95), 3)
+                    pred = 1 if proba > 0.5 else 0
+                else:
+                    try:
+                        row = pd.DataFrame(0.0, index=[0], columns=feature_names)
+                        mapping = {
+                            "age":age,"duration":duration,"campaign":campaign,
+                            "pdays":pdays,"euribor3m":euribor3m,
+                            "nr.employed":nr_emp,"emp.var.rate":emp_var,
+                            "cons.price.idx":cons_p,"cons.conf.idx":cons_c,
+                        }
+                        for k, v in mapping.items():
+                            if k in row.columns:
+                                row[k] = v
+                        key_map = {"Gradient Boosting":"gb","Random Forest":"rf","Arbre de decision":"dt"}
+                        clf   = models_data[key_map[choix]]
+                        pred  = int(clf.predict(row)[0])
+                        proba = float(clf.predict_proba(row)[0][1])
+                    except Exception as e:
+                        st.error(f"Erreur : {e}")
+                        pred, proba = 0, 0.0
+                lbl = "Souscription probable" if pred == 1 else "Souscription improbable"
+                pred_box(lbl, proba, positive=(pred == 1))
+            else:
+                empty_state("Remplissez le formulaire et cliquez sur Predire")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PARTIE 2 — RESEAU DE NEURONES
+# ══════════════════════════════════════════════════════════════════════
+elif partie == "Partie 2 — Reseau de Neurones":
+
+    hero("Partie 2","Reseau de Neurones Artificiel",
+         "TensorFlow / Keras — Bank Telemarketing — Classification binaire")
+
+    tabs = st.tabs(["Architecture","Entrainement","Performances","Prediction"])
+
+    with tabs[0]:
+        glass("Contexte et motivation",
+            "<p>Un reseau de neurones artificiel apprend automatiquement des representations "
+            "non lineaires. Chaque neurone calcule : "
+            "<code>sortie = activation(w1.x1 + ... + wn.xn + biais)</code>. "
+            "La fonction d'activation est indispensable — sans elle, empiler des couches "
+            "reviendrait a une simple regression lineaire.</p>"
+            "<p><strong>TensorFlow 2.19 / Keras 3.10</strong> avec l'API Sequential.</p>"
+            "<p><strong>Normalisation StandardScaler obligatoire</strong> : sans elle, la loss "
+            "demarrait a 3.34 avec des sauts erratiques. Apres normalisation : 0.27, descente reguliere.</p>"
+        )
+        divider()
+        col1, col2 = st.columns(2)
+        with col1:
+            glass("Architecture simple (2 couches cachees)","")
+            codeblock(
+                "model = Sequential([\n"
+                "    Dense(64, activation='relu',\n"
+                "          input_shape=(47,)),\n"
+                "    Dense(32, activation='relu'),\n"
+                "    Dense(1,  activation='sigmoid')\n"
+                "])"
+            )
+            html_table(
+                ["Couche","Neurones","Parametres"],
+                [["Dense relu","64","3 072"],["Dense relu","32","2 080"],
+                 ["Dense sigmoid","1","33"],["Total","—","5 185"]]
+            )
+        with col2:
+            glass("Architecture finale (3 couches + Dropout)","")
+            codeblock(
+                "model = Sequential([\n"
+                "    Dense(128, activation='relu',\n"
+                "          input_shape=(47,)),\n"
+                "    Dropout(0.3),\n"
+                "    Dense(64, activation='relu'),\n"
+                "    Dropout(0.2),\n"
+                "    Dense(32, activation='relu'),\n"
+                "    Dense(1,  activation='sigmoid')\n"
+                "])\n"
+                "model.compile(\n"
+                "    optimizer='adam',\n"
+                "    loss='binary_crossentropy',\n"
+                "    metrics=['accuracy']\n"
+                ")"
+            )
+            html_table(
+                ["Couche","Neurones","Parametres"],
+                [["Dense relu","128","6 144"],["Dropout 0.3","—","0"],
+                 ["Dense relu","64","8 256"],["Dropout 0.2","—","0"],
+                 ["Dense relu","32","2 080"],["Dense sigmoid","1","33"],
+                 ["Total","—","16 513"]]
+            )
+        divider()
+        glass("Justification des choix",
+            "<ul>"
+            "<li><strong>ReLU</strong> (f(x) = max(0,x)) dans les couches cachees — evite le vanishing gradient.</li>"
+            "<li><strong>Sigmoid</strong> en sortie — produit une probabilite entre 0 et 1. Si &gt; 0.5 → predit yes.</li>"
+            "<li><strong>Softmax</strong> (suggere dans le TP) est reserve aux problemes multi-classes — incorrect ici.</li>"
+            "<li><strong>Dropout</strong> — eteint aleatoirement des neurones, forcant une representation robuste.</li>"
+            "<li><strong>Adam</strong> — optimiseur adaptatif, ajuste le taux d'apprentissage individuellement.</li>"
+            "<li><strong>Early stopping (patience=15)</strong> — arret automatique, restauration des meilleurs poids.</li>"
+            "</ul>"
+        )
+
+    with tabs[1]:
+        metrics_row([
+            ("Epochs realises","28 / 100",""),
+            ("Meilleur epoch","13","hi"),
+            ("Meilleure val_loss","0.1850","best"),
+            ("Batch size","32",""),
+            ("Patience","15",""),
+        ])
+        show_image("courbes_apprentissage_nn.png","Loss et Accuracy par epoch")
+        col1, col2 = st.columns(2)
+        with col1:
+            glass("Graphe Loss",
+                "<ul>"
+                "<li>Loss Train : descend regulierement de 0.27 a 0.16.</li>"
+                "<li>Loss Validation : descend de 0.198 a 0.185 puis se stabilise.</li>"
+                "<li>Arret a l'epoch 28, restauration des poids de l'epoch 13.</li>"
+                "<li>Pas de surapprentissage violent.</li>"
+                "</ul>"
+            )
+        with col2:
+            glass("Graphe Accuracy",
+                "<ul>"
+                "<li>Accuracy Train : 89 % → 92.5 %.</li>"
+                "<li>Accuracy Validation : stabilisation autour de 91 % des l'epoch 5.</li>"
+                "<li>Les deux courbes restent proches — bon equilibre apprentissage/generalisation.</li>"
+                "</ul>"
+            )
+
+    with tabs[2]:
+        metrics_row([
+            ("Accuracy","0.9187",""),
+            ("F1-score","0.6158","hi"),
+            ("Precision","0.6581",""),
+            ("Recall","0.5787",""),
+            ("AUC-ROC","0.9486","best"),
+        ])
+        glass("Modele 47 variables vs 10 variables","")
+        html_table(
+            ["Metrique","47 variables","10 variables","Difference"],
+            [
+                ["Accuracy","0.9150","0.9187","+0.0037"],
+                ["F1-score","0.6102","0.6158","+0.0056"],
+                ["Precision","0.6313","0.6581","+0.0268"],
+                ["Recall","0.5905","0.5787","-0.0118"],
+                ["AUC-ROC","0.9464","0.9486","+0.0022"],
+            ]
+        )
+        glass("Conclusion",
+            "<p>Le modele a <strong>10 variables surpasse le modele complet</strong> sur presque "
+            "toutes les metriques — les 37 autres variables apportaient du bruit. "
+            "C'est le <strong>fleau de la dimensionnalite</strong>.</p>"
+            "<p>Top 5 variables retenues : <strong>duration</strong>, euribor3m, nr.employed, age, campaign.</p>"
+        )
+
+    with tabs[3]:
+        model_nn, scaler_nn, feats_nn = load_nn()
+        demo_nn = model_nn is None
+        if demo_nn:
+            st.info("Fichiers du reseau de neurones non trouves dans modeles/ — mode demonstration actif.")
+
+        col_f, col_r = st.columns([3, 2])
+        with col_f:
+            glass("10 variables cles","")
+            c1, c2 = st.columns(2)
+            with c1:
+                p_dur   = st.number_input("Duree appel (s)", 0, 5000, 300, key="p2_dur")
+                p_eur   = st.number_input("Euribor 3m", -2.0, 6.0, 1.3, key="p2_eur")
+                p_nremp = st.number_input("Nr employed", 4900.0, 5300.0, 5099.1, key="p2_nremp")
+                p_age   = st.number_input("Age", 18, 95, 40, key="p2_age")
+                p_camp  = st.number_input("Nb contacts", 1, 50, 2, key="p2_camp")
+            with c2:
+                p_pdays = st.number_input("pdays", 0, 999, 999, key="p2_pdays")
+                p_consc = st.number_input("Cons conf idx", -55.0, -25.0, -41.8, key="p2_consc")
+                p_consp = st.number_input("Cons price idx", 92.0, 95.0, 93.2, key="p2_consp")
+                p_pout  = st.selectbox("Campagne precedente reussie", [0,1], key="p2_pout")
+                p_hous  = st.selectbox("Pret immobilier", [0,1], key="p2_hous")
+            go_nn = st.button("Predire avec le reseau de neurones", use_container_width=True, key="p2_go")
+
+        with col_r:
+            if go_nn:
+                if demo_nn:
+                    import random
+                    proba_nn = round(random.uniform(0.05, 0.95), 3)
+                    pred_nn = 1 if proba_nn > 0.5 else 0
+                else:
+                    try:
+                        vals = [p_dur,p_eur,p_nremp,p_age,p_camp,p_pdays,p_consc,p_consp,p_pout,p_hous]
+                        row  = np.array(vals).reshape(1,-1)
+                        row_s = scaler_nn.transform(row)
+                        proba_nn = float(model_nn.predict(row_s, verbose=0)[0][0])
+                        pred_nn  = 1 if proba_nn > 0.5 else 0
+                    except Exception as e:
+                        st.error(f"Erreur : {e}")
+                        proba_nn, pred_nn = 0.0, 0
+                lbl = "Souscription probable" if pred_nn == 1 else "Souscription improbable"
+                pred_box(lbl, proba_nn, positive=(pred_nn==1))
+            else:
+                empty_state("Remplissez le formulaire et lancez la prediction")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PARTIE 3 — DEEP LEARNING CNN
+# ══════════════════════════════════════════════════════════════════════
+else:
+    hero("Partie 3","Apprentissage Profond — CNN",
+         "Fashion MNIST — Classification d'images de vetements — 10 categories")
+
+    tabs = st.tabs(["Dataset","Architectures","Resultats","Prediction"])
+
+    with tabs[0]:
+        metrics_row([
+            ("Images totales","70 000","best"),
+            ("Entrainement","60 000","hi"),
+            ("Test","10 000","hi"),
+            ("Classes","10",""),
+            ("Resolution","28 x 28",""),
+            ("Equilibre","6 000/classe",""),
+        ])
+        show_image("fashion_mnist_exemples.png","Exemples d'images — une par classe")
+        col1, col2 = st.columns(2)
+        with col1:
+            glass("Specificites",
+                "<ul>"
+                "<li><strong>Parfaitement equilibre</strong> : 6 000 images par classe — aucun biais.</li>"
+                "<li><strong>Difficulte reelle</strong> : T-shirt vs Chemise, Sandale vs Sneaker.</li>"
+                "<li>Cree par <strong>Zalando Research</strong> comme alternative au MNIST de chiffres.</li>"
+                "</ul>"
+            )
+        with col2:
+            glass("Pretraitement",
+                "<ul>"
+                "<li><strong>Normalisation</strong> : pixels / 255 → valeurs dans [0,1].</li>"
+                "<li><strong>Encodage</strong> : <code>to_categorical()</code> — vecteurs binaires de dim 10.</li>"
+                "<li><strong>Reshape</strong> : (28, 28, 1) — canal unique pour niveaux de gris.</li>"
+                "</ul>"
+                "<p><strong>Metriques</strong> : Categorical Crossentropy (loss) + Accuracy "
+                "(fiable car dataset equilibre).</p>"
+            )
+        glass("Pourquoi des CNN et non des reseaux Dense ?",
+            "<p>Un reseau Dense ne comprend pas la <strong>structure spatiale</strong> d'une image. "
+            "Un <strong>CNN</strong> applique des filtres convolutifs qui detectent automatiquement "
+            "les formes, contours et textures.</p>"
+            "<ul>"
+            "<li><strong>Conv2D</strong> : filtres detectant des patterns visuels.</li>"
+            "<li><strong>MaxPooling2D</strong> : reduit la taille en gardant l'essentiel.</li>"
+            "<li><strong>Flatten</strong> : transforme la carte 2D en vecteur 1D pour les couches Dense.</li>"
+            "<li><strong>Softmax</strong> en sortie : 10 probabilites qui somment a 1.</li>"
+            "</ul>"
+        )
+
+    with tabs[1]:
+        archi_sel = st.selectbox("Selectionner une architecture", [
+            "CNN de base","LeNet-5 (1998)","Mini-VGGNet (2014)","ResNet simplifie (2015)"
+        ])
+        divider()
+        if archi_sel == "CNN de base":
+            glass("CNN de base — 225 034 parametres","")
+            codeblock(
+                "Conv2D(32, kernel=(3,3), activation='relu') → MaxPooling(2x2)\n"
+                "Conv2D(64, kernel=(3,3), activation='relu') → MaxPooling(2x2)\n"
+                "Flatten → Dense(128, relu) → Dropout(0.3) → Dense(10, softmax)"
+            )
+            glass("Analyse",
+                "<p>Bon rapport performance/complexite. Ameliore LeNet grace aux filtres "
+                "3x3 et ReLU modernes. <strong>Accuracy : 90.71 %</strong></p>"
+            )
+        elif archi_sel == "LeNet-5 (1998)":
+            glass("LeNet-5 — 61 706 parametres (Yann LeCun, 1998)","")
+            codeblock(
+                "Conv2D(6,  kernel=(5,5), activation='tanh', padding='same') → MaxPooling(2x2)\n"
+                "Conv2D(16, kernel=(5,5), activation='tanh') → MaxPooling(2x2)\n"
+                "Flatten → Dense(120, tanh) → Dense(84, tanh) → Dense(10, softmax)"
+            )
+            glass("Analyse",
+                "<p>Architecture historique pour la reconnaissance de chiffres. Filtres 5x5 "
+                "et activation tanh moins efficaces. Avantage : tres leger. "
+                "<strong>Accuracy : 89.17 %</strong></p>"
+            )
+        elif archi_sel == "Mini-VGGNet (2014)":
+            glass("Mini-VGGNet — 872 042 parametres","")
+            codeblock(
+                "[Conv2D(32) + BatchNorm + Conv2D(32)] → MaxPooling → Dropout(0.25)\n"
+                "[Conv2D(64) + BatchNorm + Conv2D(64)] → MaxPooling → Dropout(0.25)\n"
+                "Flatten → Dense(256) + BatchNorm → Dropout(0.5) → Dense(10, softmax)"
+            )
+            glass("Analyse",
+                "<p>Doubles couches de convolution et BatchNormalization accelerent "
+                "l'apprentissage et stabilisent la loss. Plus lourd (872K parametres) "
+                "mais tres performant. <strong>Accuracy : 93.21 %</strong></p>"
+            )
+        else:
+            glass("ResNet simplifie — 515 146 parametres (He et al., 2015)","")
+            codeblock(
+                "def residual_block(x, filters):\n"
+                "    shortcut = x\n"
+                "    x = Conv2D(filters, (3,3), padding='same')(x)\n"
+                "    x = BatchNorm()(x)\n"
+                "    x = Conv2D(filters, (3,3), padding='same')(x)\n"
+                "    x = BatchNorm()(x)\n"
+                "    x = Add()([x, shortcut])  # skip connection\n"
+                "    return Activation('relu')(x)\n\n"
+                "Conv2D(32)+BN → ResidualBlock(32) → MaxPooling → Dropout\n"
+                "Conv2D(64)+BN → ResidualBlock(64) → MaxPooling → Dropout\n"
+                "Flatten → Dense(128) → Dropout(0.4) → Dense(10, softmax)"
+            )
+            glass("Analyse",
+                "<p>Les <strong>connexions residuelles</strong> (skip connections) "
+                "permettent a l'information de court-circuiter des couches, resolvant "
+                "le probleme de vanishing gradient. Meilleur modele avec moins de "
+                "parametres que VGGNet. <strong>Accuracy : 93.36 %</strong></p>"
+            )
+
+    with tabs[2]:
+        metrics_row([
+            ("LeNet-5","89.17 %",""),
+            ("CNN de base","90.71 %",""),
+            ("VGGNet","93.21 %","hi"),
+            ("ResNet","93.36 %","best"),
+        ])
+        show_image("comparaison_fashion_mnist.png","Accuracy et Loss — comparaison des 4 architectures")
+        divider()
+        html_table(
+            ["Modele","Accuracy","Loss","Parametres","Epochs"],
+            [
+                ["LeNet-5","0.8917","0.2954","61 706","13"],
+                ["CNN de base","0.9071","0.2514","225 034","13"],
+                ["Mini-VGGNet","0.9321","0.1870","872 042","12"],
+                ["ResNet simplifie","0.9336","0.1802","515 146","16"],
+            ],
+            best_col="Accuracy"
+        )
+        glass("Analyse comparative",
+            "<ul>"
+            "<li><strong>LeNet (89.17 %)</strong> — concu pour des chiffres simples (1998). Filtres 5x5 et tanh penalisants.</li>"
+            "<li><strong>CNN de base (90.71 %)</strong> — excellent rapport performance/complexite.</li>"
+            "<li><strong>VGGNet (93.21 %)</strong> — saut significatif, mais le plus lourd (872K parametres).</li>"
+            "<li><strong>ResNet (93.36 %)</strong> — meilleur modele, plus performant que VGGNet "
+            "avec moins de parametres grace aux connexions residuelles.</li>"
+            "</ul>"
+            "<p>Le modele ResNet a ete sauvegarde sous <code>bank-tel.keras</code>.</p>"
+        )
+
+    with tabs[3]:
+        model_cnn = load_cnn()
+        if model_cnn is None:
+            st.info("Fichier modeles/resnet_fashion.keras non trouve. Chargez le modele pour activer la prediction.")
+
+        col1, col2 = st.columns([1.1, 1])
+
+        with col1:
+            glass("Charger une image",
+                "<p>Deposez une image de vetement (PNG ou JPG). "
+                "Elle sera redimensionnee automatiquement a 28x28 pixels "
+                "et convertie en niveaux de gris.</p>"
+            )
+            uploaded = st.file_uploader(
+                "Deposer une image", type=["png","jpg","jpeg"],
+                label_visibility="collapsed", key="p3_upload"
+            )
+            divider()
+            sec_label("Ou tester avec une image du dataset")
+            rand_btn = st.button("Image aleatoire Fashion MNIST", use_container_width=True, key="p3_rand")
+
+            # Store random image in session state
+            if rand_btn:
+                try:
+                    import tensorflow as tf
+                    (_,_),(Xt,yt) = tf.keras.datasets.fashion_mnist.load_data()
+                    ri = np.random.randint(0, len(Xt))
+                    st.session_state["rand_img"]  = Xt[ri]
+                    st.session_state["rand_label"] = int(yt[ri])
+                except Exception as e:
+                    st.error(f"Impossible de charger Fashion MNIST : {e}")
+
+        with col2:
+            # ── Uploaded image prediction ──────────────────────────────
+            if uploaded is not None:
+                pil_img = PILImage.open(uploaded).convert("L").resize((28,28))
+                st.image(pil_img, caption="Image chargee (28x28 px)", width=160)
+                predict_upload_btn = st.button("Predire cette image", key="p3_pred_upload", use_container_width=True)
+                if predict_upload_btn:
+                    if model_cnn is not None:
+                        arr   = np.array(pil_img) / 255.0
+                        preds = model_cnn.predict(arr.reshape(1,28,28,1), verbose=0)[0]
+                        idx   = int(np.argmax(preds))
+                        pred_box(f"Prediction : {CLASS_NAMES[idx]}", float(preds[idx]), positive=True)
+                        st.markdown(
+                            "<div class='glass' style='margin-top:0.75rem;'>"
+                            "<div class='glass-title'>Distribution des probabilites</div>"
+                            "</div>",
+                            unsafe_allow_html=True
+                        )
+                        html_table(
+                            ["Classe","Probabilite"],
+                            sorted(
+                                [[CLASS_NAMES[i], f"{preds[i]:.2%}"] for i in range(10)],
+                                key=lambda x: float(x[1].strip("%")),
+                                reverse=True
+                            )
+                        )
+                    else:
+                        st.warning("Modele non charge.")
+
+            # ── Random image ───────────────────────────────────────────
+            elif "rand_img" in st.session_state:
+                rand_img   = st.session_state["rand_img"]
+                true_label = st.session_state["rand_label"]
+                true_name  = CLASS_NAMES[true_label]
+                st.image(rand_img, caption=f"Vraie classe : {true_name}", width=160)
+                predict_rand_btn = st.button("Predire cette image", key="p3_pred_rand", use_container_width=True)
+                if predict_rand_btn:
+                    if model_cnn is not None:
+                        inp   = rand_img.reshape(1,28,28,1) / 255.0
+                        preds = model_cnn.predict(inp, verbose=0)[0]
+                        idx   = int(np.argmax(preds))
+                        correct = CLASS_NAMES[idx] == true_name
+                        suffix  = "Correct" if correct else f"Incorrect — vraie classe : {true_name}"
+                        pred_box(f"{CLASS_NAMES[idx]} — {suffix}", float(preds[idx]), positive=correct)
+                    else:
+                        st.warning("Modele non charge.")
+            else:
+                empty_state("Deposez une image ou generez-en une aleatoire")
