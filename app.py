@@ -74,9 +74,6 @@ IMG = "graphiques"
 import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MOD = os.path.join(BASE_DIR, "modeles")
-import streamlit as st
-st.write("Chemin MOD :", MOD)
-st.write("Fichiers trouvés :", os.listdir(MOD) if os.path.exists(MOD) else "DOSSIER INTROUVABLE")
 CLASS_NAMES = ["T-shirt","Pantalon","Pull","Robe","Manteau",
                "Sandale","Chemise","Sneaker","Sac","Bottine"]
                
