@@ -461,15 +461,10 @@ def empty(text="Lancez une prediction pour voir le resultat"):
 @st.cache_resource
 def load_classic():
     try:
-        path_m = os.path.join(MOD, "all_models.pkl")
-        path_f = os.path.join(MOD, "feature_names.pkl")
-        st.write("Chargement depuis :", path_m)
-        st.write("Existe :", os.path.exists(path_m))
-        m = joblib.load(path_m)
-        f = joblib.load(path_f)
+        m = joblib.load(os.path.join(MOD, "all_models.pkl"))
+        f = joblib.load(os.path.join(MOD, "feature_names.pkl"))
         return m, f
-    except Exception as e:
-        st.write("ERREUR :", str(e))
+    except Exception:
         return None, None
 @st.cache_resource
 def load_nn():
