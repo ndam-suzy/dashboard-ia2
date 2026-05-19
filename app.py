@@ -71,7 +71,9 @@ div[data-testid="stRadio"] > div > label > div:first-child {
 </style>
 """, unsafe_allow_html=True)
 IMG = "graphiques"
-MOD = "modeles"
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MOD = os.path.join(BASE_DIR, "modeles")
 CLASS_NAMES = ["T-shirt","Pantalon","Pull","Robe","Manteau",
                "Sandale","Chemise","Sneaker","Sac","Bottine"]
 
